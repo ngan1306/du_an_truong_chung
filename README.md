@@ -201,4 +201,8 @@ Ngân
 
 Project được quản lý mã nguồn bằng Git và GitHub.
 
+## Kiểm tra CI/CD
+
+Dự án đã triển khai CI/CD bằng GitHub Actions, Docker và Render.
+
 **Lưu ý**: Đây là ứng dụng demo. Hãy đảm bảo thay đổi `JWT_SECRET_KEY` và các cấu hình bảo mật khác trước khi triển khai lên production.
