@@ -94,10 +94,11 @@ pipeline {
                 echo 'Chạy ansible-playbook để deploy...'
                 sh '''
                     docker run --rm --network devops-net \
-                      -v $PWD/ansible:/workspace \
-                      -v ~/.ssh:/root/.ssh:ro \
-                      ansible-controller \
-                      ansible-playbook -i inventory/hosts.ini playbook/deploy.yml
+                    -v "$PWD/ansible:/workspace" \
+                    -v "$HOME/.ssh:/root/.ssh:ro" \
+                    -w /workspace \
+                    ansible-controller \
+                    ansible-playbook -i inventory/hosts.ini playbook/deploy.yml
                 '''
             }
         }
