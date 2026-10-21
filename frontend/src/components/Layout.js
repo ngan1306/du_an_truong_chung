@@ -1,6 +1,6 @@
 import React from 'react';
 import { Menu, Layout, Avatar, Dropdown, Button } from 'antd';
-import { UserOutlined, LogoutOutlined, HomeOutlined, LaptopOutlined, CheckCircleOutlined, TeamOutlined, BankOutlined, FolderOutlined, LockOutlined, BellOutlined, FileTextOutlined, BarChartOutlined } from '@ant-design/icons';
+import { UserOutlined, LogoutOutlined, HomeOutlined, LaptopOutlined, CheckCircleOutlined, BankOutlined, FolderOutlined, LockOutlined, BellOutlined, FileTextOutlined, BarChartOutlined } from '@ant-design/icons';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './Layout.css';

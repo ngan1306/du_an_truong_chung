@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, Space, Spin, message } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, Space, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { getDevices, createDevice, updateDevice, deleteDevice } from '../api';
 import './Devices.css';
@@ -31,6 +31,7 @@ const Devices = () => {
 
   useEffect(() => {
     fetchDevices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAddDevice = () => {

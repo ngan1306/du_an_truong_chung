@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Space, message, Tag } from 'antd';
-import { EyeOutlined } from '@ant-design/icons';
+import { Table, message, Tag } from 'antd';
 
 const Logs = () => {
   const [logs, setLogs] = useState([]);

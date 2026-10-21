@@ -28,7 +28,7 @@ import {
 const Storage = () => {
   const [storages, setStorages] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
+  const [pagination] = useState({ current: 1, pageSize: 10 });
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingStorage, setEditingStorage] = useState(null);
   const [form] = Form.useForm();
