@@ -20,7 +20,7 @@ RUN apk add --no-cache\
 WORKDIR /workspace
 
 # Configure SSH permissions
-RUN RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh
+RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh
 
 # Verify installed tools
 RUN ansible --version &&\
