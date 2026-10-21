@@ -27,7 +27,6 @@ import {
 const Permissions = () => {
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [pagination] = useState({ current: 1, pageSize: 10 });
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingPermission, setEditingPermission] = useState(null);
   const [form] = Form.useForm();
