@@ -93,6 +93,7 @@ pipeline {
             steps {
                 echo 'Chạy ansible-playbook để deploy...'
                 sh '''
+                    docker build -t ansible-controller -f ansible/Dockerfile ansible
                     docker run --rm --network devops-net \
                     -v "$PWD/ansible:/workspace" \
                     -v "$HOME/.ssh:/root/.ssh:ro" \
