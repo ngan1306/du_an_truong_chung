@@ -91,12 +91,17 @@ pipeline {
         // ==========================================================
         stage('5. Deploy lên máy chủ web bằng Ansible') {
             steps {
+                echo 'Chuẩn bị file build cho Ansible...'
+                sh '''
+                    mkdir -p ansible/build
+                    cp -r frontend/build/* ansible/build/
+                '''
                 echo 'Chạy ansible-playbook để deploy...'
                 sh '''
                     docker build -t ansible-controller -f ansible/Dockerfile ansible
                     docker run --rm \
                         -v "$PWD/ansible:/workspace" \
-                        -v "$HOME/.ssh:/root/.ssh:ro" \
+                        -v /var/jenkins_home/.ssh:/root/.ssh:ro \
                         -w /workspace \
                         ansible-controller \
                         ansible-playbook -i inventory/hosts.ini playbook/deploy.yml

@@ -1,0 +1,3 @@
+# Nhóm biến dùng chung cho mọi máy chủ web
+# (Nếu file group_vars/web.yml trống, các biến trong playbook/deploy.yml sẽ được dùng)
+nginx_port: 80

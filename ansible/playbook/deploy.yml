@@ -1,0 +1,144 @@
+---
+# ============================================================
+# PLAYBOOK: Cài đặt Nginx + Deploy ứng dụng lên máy chủ web
+# Chạy: ansible-playbook -i inventory/hosts.ini playbook/deploy.yml
+# ============================================================
+- name: Cai dat va cau hinh may chu web
+  hosts: web
+  become: yes
+
+  vars:
+    app_name: du-an-truong-chung
+    app_root: /var/www/{{ app_name }}
+    web_user: www-data
+    nginx_port: 80
+
+  tasks:
+    # ==========================================================
+    # 1. Cập nhật hệ thống
+    # ==========================================================
+    - name: Cap nhat apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    # ==========================================================
+    # 2. CÀI ĐẶT NGINX (web server)
+    # ==========================================================
+    - name: Cai dat Nginx
+      apt:
+        name: nginx
+        state: present
+
+    # ==========================================================
+    # 3. KHỞI ĐỘNG DỊCH VỤ WEB
+    # ==========================================================
+    - name: Dam bao Nginx dang chay va khoi dong cung he thong
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    # ==========================================================
+    # 4. CHUẨN BỊ THƯ MỤC ỨNG DỤNG
+    # ==========================================================
+    - name: Tao thu muc ung dung
+      file:
+        path: "{{ app_root }}"
+        state: directory
+        owner: "{{ web_user }}"
+        group: "{{ web_user }}"
+        mode: '0755'
+
+    # ==========================================================
+    # 5. DEPLOY ỨNG DỤNG (copy file build từ Jenkins workspace)
+    #    Ansible controller mount thư mục ./ansible/build -> copy ra
+    # ==========================================================
+    - name: Kiem tra thu muc build co ton tai khong
+      delegate_to: localhost
+      run_once: true
+      stat:
+        path: build/index.html
+      register: build_stat
+      become: false
+
+    - name: Luu ket qua kiem tra
+      set_fact:
+        deploy_static_files: "{{ hostvars[groups['web'][0]].build_stat.stat.exists }}"
+      run_once: true
+
+    - name: Copy file build cua frontend (index.html...)
+      copy:
+        src: build/                 # thư mục ansible/build chứa bản build
+        dest: "{{ app_root }}/"
+        owner: "{{ web_user }}"
+        group: "{{ web_user }}"
+        mode: '0644'
+      when: deploy_static_files | bool
+      notify: restart nginx
+
+    # Trang chào mừng nếu chưa có file build (thư mục ansible/build trống hoặc không tồn tại)
+    - name: Tao trang index.mac dinh neu khong co file build
+      copy:
+        content: |
+          <html>
+            <head><title>{{ app_name }}</title></head>
+            <body style="font-family:sans-serif;text-align:center;margin-top:15vh">
+              <h1>Deploy thành công qua Ansible! 🎉</h1>
+              <p>Máy chủ: {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})</p>
+              <p>Thời điểm deploy: {{ ansible_date_time.iso8601 }}</p>
+            </body>
+          </html>
+        dest: "{{ app_root }}/index.html"
+        owner: "{{ web_user }}"
+        group: "{{ web_user }}"
+        mode: '0644'
+      when: deploy_static_files is not defined or not deploy_static_files
+
+    # ==========================================================
+    # 6. CẤU HÌNH NGINX VHOST
+    # ==========================================================
+    - name: Cau hinh Nginx virtual host
+      template:
+        src: nginx-app.conf.j2
+        dest: /etc/nginx/sites-available/{{ app_name }}.conf
+      notify: restart nginx
+
+    - name: Bat cau hinh vhost (symlink sites-enabled)
+      file:
+        src: /etc/nginx/sites-available/{{ app_name }}.conf
+        dest: /etc/nginx/sites-enabled/{{ app_name }}.conf
+        state: link
+      notify: restart nginx
+
+    - name: Xoa default site cua Nginx
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: restart nginx
+
+    # ==========================================================
+    # 7. KIỂM TRA CẤU HÌNH + KIỂM TRA MÁY CHỦ HOẠT ĐỘNG
+    # ==========================================================
+    - name: Kiem tra cau hinh Nginx hop le
+      command: nginx -t
+      changed_when: false
+
+    - name: Kiem tra dich vu web tra ve HTTP 200
+      uri:
+        url: "http://localhost:{{ nginx_port }}/"
+        status_code: 200
+      register: http_check
+      retries: 3
+      delay: 5
+
+    - name: Xac nhan may chu web hoat dong
+      debug:
+        msg: "✅ Máy chủ {{ inventory_hostname }} hoạt động tốt - HTTP {{ http_check.status }}"
+
+  handlers:
+    - name: restart nginx
+      service:
+        name: nginx
+        state: restarted
