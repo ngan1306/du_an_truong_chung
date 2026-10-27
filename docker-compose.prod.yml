@@ -5,7 +5,6 @@
 #   docker compose -f docker-compose.prod.yml --env-file .env pull
 #   docker compose -f docker-compose.prod.yml --env-file .env up -d
 services:
-
   backend:
     image: docker.io/${DOCKER_USERNAME:-ngan1306}/du-an-truong-chung-backend:latest
     container_name: du-an-backend
@@ -17,6 +16,8 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
     env_file:
       - .env
+    networks:
+      - app-network
 
   frontend:
     image: docker.io/${DOCKER_USERNAME:-ngan1306}/du-an-truong-chung-frontend:latest
@@ -28,6 +29,8 @@ services:
       - backend
     env_file:
       - .env
+    networks:
+      - app-network
 
 networks:
   app-network:
