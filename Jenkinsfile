@@ -1,11 +1,16 @@
-// Jenkinsfile - CI/CD Pipeline: Pull code -> Build -> Test
+// Jenkinsfile - CI/CD Pipeline:
+// Checkout → Build → Test → Docker Build → Push Docker Hub → Deploy Production
 pipeline {
     agent any
 
     environment {
-        // Đổi lại theo repo của bạn (SSH hoặc HTTPS)
-        GIT_REPO = 'https://github.com/ngan1306/du_an_truong_chung.git'
-        GIT_BRANCH = 'main'
+        GIT_REPO      = 'https://github.com/ngan1306/du_an_truong_chung.git'
+        GIT_BRANCH    = 'main'
+        // Đổi DOCKER_USERNAME cho khớp tài khoản Docker Hub của bạn
+        IMAGE_BACKEND = 'du-an-truong-chung-backend'
+        IMAGE_FRONTEND= 'du-an-truong-chung-frontend'
+        SERVER_HOST   = '192.168.1.10'   // ⭐ IP production server
+        SERVER_USER   = 'ubuntu'          // ⭐ user SSH production server
     }
 
     options {
@@ -18,17 +23,23 @@ pipeline {
     stages {
 
         // ==========================================================
-        // BƯỚC 1: PULL CODE TỪ GIT
+        // 1. CHECKOUT
         // ==========================================================
-        stage('1. Pull code từ Git') {
+        stage('1. Checkout') {
             steps {
                 echo 'Đang pull code từ Git repository...'
-                git branch: "${GIT_BRANCH}", url: "${GIT_REPO}"
+                checkout([$class: 'GitSCM',
+                    branches: [[name: "*/${GIT_BRANCH}"]],
+                    userRemoteConfigs: [[
+                        url: "${GIT_REPO}",
+                        credentialsId: 'github-pat'
+                    ]]
+                ])
             }
         }
 
         // ==========================================================
-        // BƯỚC 2: BUILD ỨNG DỤNG
+        // 2. BUILD ỨNG DỤNG
         // ==========================================================
         stage('2. Build Backend (Flask)') {
             steps {
@@ -47,13 +58,14 @@ pipeline {
                 echo 'Build Frontend...'
                 sh '''
                     cd frontend
+                    npm ci
                     CI=false npm run build
                 '''
             }
         }
 
         // ==========================================================
-        // BƯỚC 3: CHẠY TEST
+        // 3. CHẠY TEST
         // ==========================================================
         stage('3. Chạy test Backend') {
             steps {
@@ -61,6 +73,7 @@ pipeline {
                 sh '''
                     cd backend
                     . ./venv/bin/activate
+                    pip install pytest || true
                     python -m pytest -v || true
                 '''
             }
@@ -71,41 +84,69 @@ pipeline {
                 echo 'Chạy test cho Frontend...'
                 sh '''
                     cd frontend
-                    npm test -- --watchAll=false || true
+                    npm test -- --watchAll=false --passWithNoTests || true
                 '''
             }
         }
 
         // ==========================================================
-        // BƯỚC 4 (TÙY CHỌN): BUILD IMAGE DOCKER
+        // 4. DOCKER BUILD
         // ==========================================================
-        stage('4. Build Docker image') {
+        stage('4. Docker Build') {
             steps {
-                echo 'Build Docker images bằng docker-compose...'
-                sh 'docker compose -f docker-compose.yml build'
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-cred',
+                    usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                        docker build -t docker.io/$DOCKER_USER/$IMAGE_BACKEND:latest  ./backend
+                        docker build -t docker.io/$DOCKER_USER/$IMAGE_FRONTEND:latest ./frontend
+                    '''
+                }
             }
         }
 
         // ==========================================================
-        // BƯỚC 5 (TÙY CHỌN): DEPLOY BẰNG ANSIBLE
+        // 5. PUSH DOCKER HUB
         // ==========================================================
-        stage('5. Deploy lên máy chủ web bằng Ansible') {
+        stage('5. Push Docker Hub') {
             steps {
-                echo 'Chuẩn bị file build cho Ansible...'
-                sh '''
-                    mkdir -p ansible/build
-                    cp -r frontend/build/* ansible/build/
-                '''
-                echo 'Chạy ansible-playbook để deploy...'
-                sh '''
-                    docker build -t ansible-controller -f ansible/Dockerfile ansible
-                    docker run --rm \
-                        -v "$PWD/ansible:/workspace" \
-                        -v /var/jenkins_home/.ssh:/root/.ssh:ro \
-                        -w /workspace \
-                        ansible-controller \
-                        ansible-playbook -i inventory/hosts.ini playbook/deploy.yml
-                '''
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-cred',
+                    usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push docker.io/$DOCKER_USER/$IMAGE_BACKEND:latest
+                        docker push docker.io/$DOCKER_USER/$IMAGE_FRONTEND:latest
+                    '''
+                }
+            }
+        }
+
+        // ==========================================================
+        // 6. DEPLOY PRODUCTION QUA SSH
+        // ==========================================================
+        stage('6. Deploy lên Production Server') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-cred',
+                    usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sshagent (credentials: ['server-ssh-key']) {
+                        sh '''
+                            # Copy docker-compose.prod.yml lên server
+                            scp -o StrictHostKeyChecking=no docker-compose.prod.yml \
+                                $SERVER_USER@$SERVER_HOST:~/project/docker-compose.prod.yml
+
+                            # SSH vào server để deploy
+                            ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "
+                                cd ~/project && \
+                                echo 'DOCKER_USERNAME=$DOCKER_USER' > .env && \
+                                grep -q JWT_SECRET_KEY .env || echo 'JWT_SECRET_KEY=change-this-secret' >> .env && \
+                                echo \"$DOCKER_PASS\" | docker login -u $DOCKER_USER --password-stdin && \
+                                docker compose -f docker-compose.prod.yml --env-file .env pull && \
+                                docker compose -f docker-compose.prod.yml --env-file .env down || true && \
+                                docker compose -f docker-compose.prod.yml --env-file .env up -d && \
+                                docker image prune -f
+                            "
+                        '''
+                    }
+                }
             }
         }
     }
@@ -119,6 +160,7 @@ pipeline {
         }
         always {
             echo 'Kết thúc pipeline. Dọn dẹp workspace nếu cần.'
+            sh 'docker logout || true'
         }
     }
 }

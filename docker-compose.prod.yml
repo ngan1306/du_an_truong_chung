@@ -1,0 +1,34 @@
+# docker-compose.prod.yml — Chạy trên PRODUCTION SERVER
+# Image được pull từ Docker Hub (Jenkins đã build + push trước đó)
+# Cách dùng trên server:
+#   echo "JWT_SECRET_KEY=..." > .env
+#   docker compose -f docker-compose.prod.yml --env-file .env pull
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d
+services:
+
+  backend:
+    image: docker.io/${DOCKER_USERNAME:-ngan1306}/du-an-truong-chung-backend:latest
+    container_name: du-an-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_ENV: production
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+    env_file:
+      - .env
+
+  frontend:
+    image: docker.io/${DOCKER_USERNAME:-ngan1306}/du-an-truong-chung-frontend:latest
+    container_name: du-an-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    env_file:
+      - .env
+
+networks:
+  app-network:
+    driver: bridge
