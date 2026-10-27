@@ -33,7 +33,11 @@ pipeline {
                     userRemoteConfigs: [[
                         url: "${GIT_REPO}",
                         credentialsId: 'github-pat'
-                    ]]
+                    ]],
+                    extensions: [
+                        [$class: 'CloneOption', depth: 0, noTags: true, shallow: false],
+                        [$class: 'CleanCheckout']
+                    ]
                 ])
             }
         }
