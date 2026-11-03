@@ -1,5 +1,6 @@
 // Jenkinsfile - CI/CD Pipeline:
-// Checkout → Build → Test → Docker Build → Push Docker Hub → Deploy Production
+// Checkout → Build → Test → Docker Build → Push Docker Hub
+// Render tự deploy từ GitHub main; Jenkins không triển khai qua SSH lên EC2.
 pipeline {
     agent any
 
@@ -9,8 +10,6 @@ pipeline {
         // Đổi DOCKER_USERNAME cho khớp tài khoản Docker Hub của bạn
         IMAGE_BACKEND = 'du-an-truong-chung-backend'
         IMAGE_FRONTEND= 'du-an-truong-chung-frontend'
-        SERVER_HOST   = '192.168.1.10'   // ⭐ IP production server
-        SERVER_USER   = 'ubuntu'          // ⭐ user SSH production server
     }
 
     options {
@@ -31,8 +30,7 @@ pipeline {
                 checkout([$class: 'GitSCM',
                     branches: [[name: "*/${GIT_BRANCH}"]],
                     userRemoteConfigs: [[
-                        url: "${GIT_REPO}",
-                        credentialsId: 'github-pat'
+                        url: "${GIT_REPO}"
                     ]],
                     extensions: [
                         [$class: 'CloneOption', depth: 0, noTags: true, shallow: false],
@@ -124,35 +122,6 @@ pipeline {
             }
         }
 
-        // ==========================================================
-        // 6. DEPLOY PRODUCTION QUA SSH
-        // ==========================================================
-        stage('6. Deploy lên Production Server') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-cred',
-                    usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sshagent (credentials: ['server-ssh-key']) {
-                        sh '''
-                            # Copy docker-compose.prod.yml lên server
-                            scp -o StrictHostKeyChecking=no docker-compose.prod.yml \
-                                $SERVER_USER@$SERVER_HOST:~/project/docker-compose.prod.yml
-
-                            # SSH vào server để deploy
-                            ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "
-                                cd ~/project && \
-                                echo 'DOCKER_USERNAME=$DOCKER_USER' > .env && \
-                                grep -q JWT_SECRET_KEY .env || echo 'JWT_SECRET_KEY=change-this-secret' >> .env && \
-                                echo \"$DOCKER_PASS\" | docker login -u $DOCKER_USER --password-stdin && \
-                                docker compose -f docker-compose.prod.yml --env-file .env pull && \
-                                docker compose -f docker-compose.prod.yml --env-file .env down || true && \
-                                docker compose -f docker-compose.prod.yml --env-file .env up -d && \
-                                docker image prune -f
-                            "
-                        '''
-                    }
-                }
-            }
-        }
     }
 
     post {
